@@ -48,7 +48,7 @@ export default function ReportBuilder() {
     const generateWithGemini = async (prompt: string) => {
         if (!apiKey) throw new Error("Veuillez configurer votre clé API Gemini dans les paramètres.");
 
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent?key=${apiKey}`, {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -84,7 +84,9 @@ export default function ReportBuilder() {
                     const synth = await generateWithGemini(prompt);
                     return { ...art, synthesis: synth };
                 } catch (e) {
-                    return { ...art, synthesis: "Impossible de générer la synthèse." };
+                    const errorMessage = e instanceof Error ? e.message : "Erreur inconnue";
+                    console.error("Erreur Gemini pour l'article", art.title, e);
+                    return { ...art, synthesis: `Erreur: ${errorMessage}` };
                 }
             })
         );
