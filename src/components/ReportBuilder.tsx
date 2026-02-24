@@ -62,6 +62,7 @@ export default function ReportBuilder() {
 
     // Social State
     const [socialGenerating, setSocialGenerating] = useState(false);
+    const [activeTab, setActiveTab] = useState<"twitter" | "meta" | "linkedin">("twitter");
 
     // New Social Inputs
     const [socialInputs, setSocialInputs] = useState({
@@ -151,34 +152,30 @@ export default function ReportBuilder() {
         }
     };
 
-    const handleAnalyzeSocial = async () => {
+    const handleAnalyzeSocial = async (network: "twitter" | "meta" | "linkedin") => {
         setSocialGenerating(true);
         try {
             const jsonPromptTemplate = `
 Analyse les données fournies pour le réseau social en question.
-Tu dois renvoyer STRICTEMENT un objet JSON valide avec les clés attendues.
-
-Si les données fournies sont manquantes ou insuffisantes, invente 0 pour les chiffres et met "Rien à signaler" pour la synthèse. Ne renvoie AUCUN autre texte que le JSON.
+Tu dois renvoyer STRICTEMENT un objet JSON valide contenant UNIQUEMENT la clé "synthesis".
+Exemple attendu : { "synthesis": "votre synthèse factuelle" }
+Ne renvoie AUCUN autre texte que le JSON. Si absence de données utiles, écris "Rien à signaler" dans synthesis.
             `;
 
             const results = { ...socialAnalysis };
 
-            if (socialInputs.twitter) {
-                const twPrompt = `${jsonPromptTemplate}\nDonnées Twitter/X : ${socialInputs.twitter}\nStructure JSON attendue :\n{ "synthesis": "ta synthèse factuelle incluant thèmes et ton", "mentions": 10, "retweets": 5, "likes": 50, "replies": 2 }`;
+            if (network === "twitter" && socialInputs.twitter) {
+                const twPrompt = `${jsonPromptTemplate}\nDonnées Twitter/X : ${socialInputs.twitter}`;
                 const twRes = await generateWithGemini(twPrompt, true);
-                results.twitter = JSON.parse(twRes);
-            }
-
-            if (socialInputs.meta) {
-                const metaPrompt = `${jsonPromptTemplate}\nDonnées Meta (FB/Insta) : ${socialInputs.meta}\nStructure JSON attendue :\n{ "synthesis": "ta synthèse incluant thèmes, ton et réactions" }`;
+                results.twitter.synthesis = JSON.parse(twRes).synthesis;
+            } else if (network === "meta" && socialInputs.meta) {
+                const metaPrompt = `${jsonPromptTemplate}\nDonnées Meta (FB/Insta) : ${socialInputs.meta}`;
                 const metaRes = await generateWithGemini(metaPrompt, true);
-                results.meta = JSON.parse(metaRes);
-            }
-
-            if (socialInputs.linkedin) {
-                const inPrompt = `${jsonPromptTemplate}\nDonnées LinkedIn : ${socialInputs.linkedin}\nStructure JSON attendue :\n{ "synthesis": "ta synthèse incluant publications, sujets dominants", "posts": 5, "reactions": 100, "comments": 20, "shares": 10 }`;
+                results.meta.synthesis = JSON.parse(metaRes).synthesis;
+            } else if (network === "linkedin" && socialInputs.linkedin) {
+                const inPrompt = `${jsonPromptTemplate}\nDonnées LinkedIn : ${socialInputs.linkedin}`;
                 const inRes = await generateWithGemini(inPrompt, true);
-                results.linkedin = JSON.parse(inRes);
+                results.linkedin.synthesis = JSON.parse(inRes).synthesis;
             }
 
             setSocialAnalysis(results);
@@ -374,101 +371,127 @@ Si les données fournies sont manquantes ou insuffisantes, invente 0 pour les ch
                 <div className="card no-print">
                     <h2 style={{ marginBottom: "1.5rem" }}>3. Analyse Réseaux Sociaux</h2>
                     <p style={{ color: "var(--text-muted)", marginBottom: "1.5rem" }}>
-                        Collez ci-dessous les données brutes pour chaque réseau. L'IA analysera les réseaux renseignés.
+                        Saisissez les statistiques pour chaque réseau et collez les données brutes pour que l'IA en génère une synthèse.
                     </p>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
-                        <div className="form-group">
-                            <label className="form-label" style={{ color: "var(--primary)" }}>Données Twitter / X</label>
-                            <textarea
-                                className="form-control"
-                                rows={6}
-                                placeholder="Collez les tweets, les hashtags, les stats ici..."
-                                value={socialInputs.twitter}
-                                onChange={(e) => setSocialInputs({ ...socialInputs, twitter: e.target.value })}
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label" style={{ color: "var(--primary)" }}>Données Meta (FB/Insta)</label>
-                            <textarea
-                                className="form-control"
-                                rows={6}
-                                placeholder="Collez les posts, commentaires, stats ici..."
-                                value={socialInputs.meta}
-                                onChange={(e) => setSocialInputs({ ...socialInputs, meta: e.target.value })}
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label" style={{ color: "var(--primary)" }}>Données LinkedIn</label>
-                            <textarea
-                                className="form-control"
-                                rows={6}
-                                placeholder="Collez les publications, engagement, sujets ici..."
-                                value={socialInputs.linkedin}
-                                onChange={(e) => setSocialInputs({ ...socialInputs, linkedin: e.target.value })}
-                            />
-                        </div>
+                    <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
+                        <button className={`btn ${activeTab === 'twitter' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('twitter')}>Twitter / X</button>
+                        <button className={`btn ${activeTab === 'meta' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('meta')}>Meta (FB/Insta)</button>
+                        <button className={`btn ${activeTab === 'linkedin' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('linkedin')}>LinkedIn</button>
                     </div>
 
-                    <button
-                        className="btn btn-outline"
-                        onClick={handleAnalyzeSocial}
-                        disabled={(!socialInputs.twitter && !socialInputs.meta && !socialInputs.linkedin) || socialGenerating}
-                        style={{ marginBottom: "1.5rem" }}
-                    >
-                        {socialGenerating ? <><Loader2 className="animate-spin" size={18} /> Analyse en cours...</> : <><RefreshCw size={18} /> Générer le rapport IA</>}
-                    </button>
-
-                    {(socialAnalysis.twitter.synthesis || socialAnalysis.meta.synthesis || socialAnalysis.linkedin.synthesis) && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                            {socialAnalysis.twitter.synthesis && (
-                                <div className="form-group">
-                                    <label className="form-label">Synthèse IA Twitter/X (Modifiable)</label>
-                                    <textarea
-                                        className="form-control"
-                                        rows={4}
-                                        value={socialAnalysis.twitter.synthesis}
-                                        onChange={(e) => setSocialAnalysis({
-                                            ...socialAnalysis,
-                                            twitter: { ...socialAnalysis.twitter, synthesis: e.target.value }
-                                        })}
-                                    />
+                    {activeTab === 'twitter' && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+                            <div>
+                                <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Statistiques (Manuelles)</h3>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Mentions</label>
+                                        <input type="number" className="form-control" value={socialAnalysis.twitter.mentions} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, twitter: { ...socialAnalysis.twitter, mentions: Number(e.target.value) } })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Retweets</label>
+                                        <input type="number" className="form-control" value={socialAnalysis.twitter.retweets} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, twitter: { ...socialAnalysis.twitter, retweets: Number(e.target.value) } })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Likes</label>
+                                        <input type="number" className="form-control" value={socialAnalysis.twitter.likes} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, twitter: { ...socialAnalysis.twitter, likes: Number(e.target.value) } })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Réponses</label>
+                                        <input type="number" className="form-control" value={socialAnalysis.twitter.replies} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, twitter: { ...socialAnalysis.twitter, replies: Number(e.target.value) } })} />
+                                    </div>
                                 </div>
-                            )}
-                            {socialAnalysis.meta.synthesis && (
+                            </div>
+                            <div>
+                                <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Analyse Intelligente (IA)</h3>
                                 <div className="form-group">
-                                    <label className="form-label">Synthèse IA Meta (Modifiable)</label>
-                                    <textarea
-                                        className="form-control"
-                                        rows={4}
-                                        value={socialAnalysis.meta.synthesis}
-                                        onChange={(e) => setSocialAnalysis({
-                                            ...socialAnalysis,
-                                            meta: { ...socialAnalysis.meta, synthesis: e.target.value }
-                                        })}
-                                    />
+                                    <label className="form-label">Données brutes Twitter/X</label>
+                                    <textarea className="form-control" rows={4} placeholder="Collez les tweets, les hashtags..." value={socialInputs.twitter} onChange={(e) => setSocialInputs({ ...socialInputs, twitter: e.target.value })} />
                                 </div>
-                            )}
-                            {socialAnalysis.linkedin.synthesis && (
-                                <div className="form-group">
-                                    <label className="form-label">Synthèse IA LinkedIn (Modifiable)</label>
-                                    <textarea
-                                        className="form-control"
-                                        rows={4}
-                                        value={socialAnalysis.linkedin.synthesis}
-                                        onChange={(e) => setSocialAnalysis({
-                                            ...socialAnalysis,
-                                            linkedin: { ...socialAnalysis.linkedin, synthesis: e.target.value }
-                                        })}
-                                    />
-                                </div>
-                            )}
+                                <button className="btn btn-outline" onClick={() => handleAnalyzeSocial("twitter")} disabled={!socialInputs.twitter || socialGenerating} style={{ width: "100%", marginBottom: "1rem" }}>
+                                    {socialGenerating ? <><Loader2 className="animate-spin" size={18} /> Génération...</> : <><RefreshCw size={18} /> Générer la synthèse Twitter</>}
+                                </button>
+                                {socialAnalysis.twitter.synthesis && (
+                                    <div className="form-group">
+                                        <label className="form-label">Synthèse IA (Modifiable)</label>
+                                        <textarea className="form-control" rows={4} value={socialAnalysis.twitter.synthesis} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, twitter: { ...socialAnalysis.twitter, synthesis: e.target.value } })} />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2rem" }}>
+                    {activeTab === 'meta' && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+                            <div>
+                                <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Statistiques (Manuelles)</h3>
+                                <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", fontStyle: "italic" }}>Pas de statistiques spécifiques paramétrées pour Meta pour le moment.</p>
+                            </div>
+                            <div>
+                                <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Analyse Intelligente (IA)</h3>
+                                <div className="form-group">
+                                    <label className="form-label">Données brutes Meta (FB/Insta)</label>
+                                    <textarea className="form-control" rows={4} placeholder="Collez les posts, commentaires..." value={socialInputs.meta} onChange={(e) => setSocialInputs({ ...socialInputs, meta: e.target.value })} />
+                                </div>
+                                <button className="btn btn-outline" onClick={() => handleAnalyzeSocial("meta")} disabled={!socialInputs.meta || socialGenerating} style={{ width: "100%", marginBottom: "1rem" }}>
+                                    {socialGenerating ? <><Loader2 className="animate-spin" size={18} /> Génération...</> : <><RefreshCw size={18} /> Générer la synthèse Meta</>}
+                                </button>
+                                {socialAnalysis.meta.synthesis && (
+                                    <div className="form-group">
+                                        <label className="form-label">Synthèse IA (Modifiable)</label>
+                                        <textarea className="form-control" rows={4} value={socialAnalysis.meta.synthesis} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, meta: { ...socialAnalysis.meta, synthesis: e.target.value } })} />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'linkedin' && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+                            <div>
+                                <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Statistiques (Manuelles)</h3>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Posts</label>
+                                        <input type="number" className="form-control" value={socialAnalysis.linkedin.posts} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, linkedin: { ...socialAnalysis.linkedin, posts: Number(e.target.value) } })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Réactions</label>
+                                        <input type="number" className="form-control" value={socialAnalysis.linkedin.reactions} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, linkedin: { ...socialAnalysis.linkedin, reactions: Number(e.target.value) } })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Commentaires</label>
+                                        <input type="number" className="form-control" value={socialAnalysis.linkedin.comments} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, linkedin: { ...socialAnalysis.linkedin, comments: Number(e.target.value) } })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Partages</label>
+                                        <input type="number" className="form-control" value={socialAnalysis.linkedin.shares} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, linkedin: { ...socialAnalysis.linkedin, shares: Number(e.target.value) } })} />
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Analyse Intelligente (IA)</h3>
+                                <div className="form-group">
+                                    <label className="form-label">Données brutes LinkedIn</label>
+                                    <textarea className="form-control" rows={4} placeholder="Collez les publications, engagement..." value={socialInputs.linkedin} onChange={(e) => setSocialInputs({ ...socialInputs, linkedin: e.target.value })} />
+                                </div>
+                                <button className="btn btn-outline" onClick={() => handleAnalyzeSocial("linkedin")} disabled={!socialInputs.linkedin || socialGenerating} style={{ width: "100%", marginBottom: "1rem" }}>
+                                    {socialGenerating ? <><Loader2 className="animate-spin" size={18} /> Génération...</> : <><RefreshCw size={18} /> Générer la synthèse LinkedIn</>}
+                                </button>
+                                {socialAnalysis.linkedin.synthesis && (
+                                    <div className="form-group">
+                                        <label className="form-label">Synthèse IA (Modifiable)</label>
+                                        <textarea className="form-control" rows={4} value={socialAnalysis.linkedin.synthesis} onChange={(e) => setSocialAnalysis({ ...socialAnalysis, linkedin: { ...socialAnalysis.linkedin, synthesis: e.target.value } })} />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2rem", borderTop: "1px solid var(--border)", paddingTop: "1.5rem" }}>
                         <button className="btn btn-outline" onClick={() => setStep(reportType === "social" ? 1 : 2)}><ArrowLeft size={18} /> Retour</button>
-                        <button className="btn btn-primary" onClick={() => setStep(4)} disabled={!socialAnalysis}>
+                        <button className="btn btn-primary" onClick={() => setStep(4)}>
                             Visualiser le Rapport PDF <ArrowRight size={18} />
                         </button>
                     </div>
