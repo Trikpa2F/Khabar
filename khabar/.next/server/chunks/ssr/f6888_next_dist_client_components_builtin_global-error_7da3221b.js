@@ -1,0 +1,3 @@
+module.exports=[98909,(a,b,c)=>{let{createClientModuleProxy:d}=a.r(36e3);a.n(d("[project]/.gemini/antigravity/scratch/khabar/node_modules/next/dist/client/components/builtin/global-error.js <module evaluation>"))},57469,(a,b,c)=>{let{createClientModuleProxy:d}=a.r(36e3);a.n(d("[project]/.gemini/antigravity/scratch/khabar/node_modules/next/dist/client/components/builtin/global-error.js"))},94101,a=>{"use strict";a.i(98909);var b=a.i(57469);a.n(b)}];
+
+//# sourceMappingURL=f6888_next_dist_client_components_builtin_global-error_7da3221b.js.map
