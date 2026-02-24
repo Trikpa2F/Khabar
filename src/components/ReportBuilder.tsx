@@ -13,6 +13,34 @@ interface Article {
     link: string;
     pubDate: string;
     synthesis: string;
+    selected?: boolean; // Pour la sélection des médias
+}
+
+export interface TwitterData {
+    synthesis: string;
+    mentions: number;
+    retweets: number;
+    likes: number;
+    replies: number;
+}
+
+export interface MetaData {
+    synthesis: string;
+    // Ajouts futurs possibles
+}
+
+export interface LinkedInData {
+    synthesis: string;
+    posts: number;
+    reactions: number;
+    comments: number;
+    shares: number;
+}
+
+export interface SocialData {
+    twitter: TwitterData;
+    meta: MetaData;
+    linkedin: LinkedInData;
 }
 
 export default function ReportBuilder() {
@@ -34,18 +62,30 @@ export default function ReportBuilder() {
 
     // Social State
     const [socialGenerating, setSocialGenerating] = useState(false);
-    const [socialInput, setSocialInput] = useState("");
-    const [socialAnalysis, setSocialAnalysis] = useState("");
+
+    // New Social Inputs
+    const [socialInputs, setSocialInputs] = useState({
+        twitter: "",
+        meta: "",
+        linkedin: ""
+    });
+
+    // New Social Analysis State
+    const [socialAnalysis, setSocialAnalysis] = useState<SocialData>({
+        twitter: { synthesis: "", mentions: 0, retweets: 0, likes: 0, replies: 0 },
+        meta: { synthesis: "" },
+        linkedin: { synthesis: "", posts: 0, reactions: 0, comments: 0, shares: 0 }
+    });
 
     useEffect(() => {
         setApiKey(localStorage.getItem("gemini_api_key") || "");
         setKeywords(localStorage.getItem("sif_keywords") || "Secours Islamique France");
         setIslamKeywords(localStorage.getItem("sif_islam_keywords") || "Islam en France, musulmans");
         setNewsPrompt(localStorage.getItem("sif_news_prompt") || "Fais une courte synthèse très factuelle de cet article en 2 phrases.");
-        setSocialPrompt(localStorage.getItem("sif_social_prompt") || "Analyse ces tweets et dégage les thèmes, le ton, et les statistiques.");
+        setSocialPrompt(localStorage.getItem("sif_social_prompt") || "Analyse ces données sociales.");
     }, []);
 
-    const generateWithGemini = async (prompt: string) => {
+    const generateWithGemini = async (prompt: string, expectJson: boolean = false) => {
         if (!apiKey) throw new Error("Veuillez configurer votre clé API Gemini dans les paramètres.");
 
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
@@ -53,7 +93,10 @@ export default function ReportBuilder() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.2 }
+                generationConfig: {
+                    temperature: 0.2,
+                    responseMimeType: expectJson ? "application/json" : "text/plain"
+                }
             })
         });
 
@@ -81,12 +124,12 @@ export default function ReportBuilder() {
             articlesData.map(async (art) => {
                 try {
                     const prompt = `Voici un titre d'article et potentiellement son origine :\nTitre : ${art.title}\nSource : ${art.source}\nDate : ${art.pubDate}\n\nInstructions : ${newsPrompt}`;
-                    const synth = await generateWithGemini(prompt);
-                    return { ...art, synthesis: synth };
+                    const synth = await generateWithGemini(prompt, false);
+                    return { ...art, synthesis: synth, selected: true };
                 } catch (e) {
                     const errorMessage = e instanceof Error ? e.message : "Erreur inconnue";
                     console.error("Erreur Gemini pour l'article", art.title, e);
-                    return { ...art, synthesis: `Erreur: ${errorMessage}` };
+                    return { ...art, synthesis: `Erreur: ${errorMessage}`, selected: true };
                 }
             })
         );
@@ -111,11 +154,36 @@ export default function ReportBuilder() {
     const handleAnalyzeSocial = async () => {
         setSocialGenerating(true);
         try {
-            const prompt = `Voici des données brutes copiées depuis les réseaux sociaux :\n\n${socialInput}\n\nInstructions : ${socialPrompt}`;
-            const analysis = await generateWithGemini(prompt);
-            setSocialAnalysis(analysis);
+            const jsonPromptTemplate = `
+Analyse les données fournies pour le réseau social en question.
+Tu dois renvoyer STRICTEMENT un objet JSON valide avec les clés attendues.
+
+Si les données fournies sont manquantes ou insuffisantes, invente 0 pour les chiffres et met "Rien à signaler" pour la synthèse. Ne renvoie AUCUN autre texte que le JSON.
+            `;
+
+            const results = { ...socialAnalysis };
+
+            if (socialInputs.twitter) {
+                const twPrompt = `${jsonPromptTemplate}\nDonnées Twitter/X : ${socialInputs.twitter}\nStructure JSON attendue :\n{ "synthesis": "ta synthèse factuelle incluant thèmes et ton", "mentions": 10, "retweets": 5, "likes": 50, "replies": 2 }`;
+                const twRes = await generateWithGemini(twPrompt, true);
+                results.twitter = JSON.parse(twRes);
+            }
+
+            if (socialInputs.meta) {
+                const metaPrompt = `${jsonPromptTemplate}\nDonnées Meta (FB/Insta) : ${socialInputs.meta}\nStructure JSON attendue :\n{ "synthesis": "ta synthèse incluant thèmes, ton et réactions" }`;
+                const metaRes = await generateWithGemini(metaPrompt, true);
+                results.meta = JSON.parse(metaRes);
+            }
+
+            if (socialInputs.linkedin) {
+                const inPrompt = `${jsonPromptTemplate}\nDonnées LinkedIn : ${socialInputs.linkedin}\nStructure JSON attendue :\n{ "synthesis": "ta synthèse incluant publications, sujets dominants", "posts": 5, "reactions": 100, "comments": 20, "shares": 10 }`;
+                const inRes = await generateWithGemini(inPrompt, true);
+                results.linkedin = JSON.parse(inRes);
+            }
+
+            setSocialAnalysis(results);
         } catch (error) {
-            alert(error instanceof Error ? error.message : "Erreur inconnue");
+            alert(error instanceof Error ? error.message : "Erreur inconnue lors de l'analyse (le JSON retourné par l'IA est peut être mal formaté)");
         } finally {
             setSocialGenerating(false);
         }
@@ -134,20 +202,39 @@ export default function ReportBuilder() {
     const renderArticleGroup = (articles: Article[], editList: Article[], setList: (list: Article[]) => void) => (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {articles.map((article, idx) => (
-                <div key={idx} style={{ padding: "1rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
-                    <h4 style={{ color: "var(--primary)", marginBottom: "0.25rem" }}>{article.title}</h4>
-                    <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>{article.source} - {new Date(article.pubDate).toLocaleDateString()}</div>
-                    <textarea
-                        className="form-control"
-                        value={article.synthesis}
-                        onChange={(e) => {
-                            const newArticles = [...editList];
-                            newArticles[idx].synthesis = e.target.value;
-                            setList(newArticles);
-                        }}
-                        rows={4}
-                    />
-                    <a href={article.link} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem", color: "var(--primary)", display: "inline-block", marginTop: "0.5rem" }}>Lire l'article original</a>
+                <div key={idx} style={{
+                    padding: "1rem",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-md)",
+                    opacity: article.selected === false ? 0.5 : 1
+                }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
+                        <input
+                            type="checkbox"
+                            checked={article.selected !== false}
+                            onChange={(e) => {
+                                const newArticles = [...editList];
+                                newArticles[idx].selected = e.target.checked;
+                                setList(newArticles);
+                            }}
+                            style={{ marginTop: "0.4rem", width: "1.2rem", height: "1.2rem", cursor: "pointer" }}
+                        />
+                        <div style={{ flex: 1 }}>
+                            <h4 style={{ color: "var(--primary)", marginBottom: "0.25rem" }}>{article.title}</h4>
+                            <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>{article.source} - {new Date(article.pubDate).toLocaleDateString()}</div>
+                            <textarea
+                                className="form-control"
+                                value={article.synthesis}
+                                onChange={(e) => {
+                                    const newArticles = [...editList];
+                                    newArticles[idx].synthesis = e.target.value;
+                                    setList(newArticles);
+                                }}
+                                rows={4}
+                            />
+                            <a href={article.link} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem", color: "var(--primary)", display: "inline-block", marginTop: "0.5rem" }}>Lire l'article original</a>
+                        </div>
+                    </div>
                 </div>
             ))}
         </div>
@@ -287,37 +374,95 @@ export default function ReportBuilder() {
                 <div className="card no-print">
                     <h2 style={{ marginBottom: "1.5rem" }}>3. Analyse Réseaux Sociaux</h2>
                     <p style={{ color: "var(--text-muted)", marginBottom: "1.5rem" }}>
-                        Collez ci-dessous les tweets ou posts récupérés pour l'analyse IA.
+                        Collez ci-dessous les données brutes pour chaque réseau. L'IA analysera les réseaux renseignés.
                     </p>
 
-                    <div className="form-group">
-                        <textarea
-                            className="form-control"
-                            rows={8}
-                            placeholder="Ex: @utilisateur1: Magnifique action de l'ONG ! @utilisateur2: Je ne comprends pas où va l'argent..."
-                            value={socialInput}
-                            onChange={(e) => setSocialInput(e.target.value)}
-                        />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+                        <div className="form-group">
+                            <label className="form-label" style={{ color: "var(--primary)" }}>Données Twitter / X</label>
+                            <textarea
+                                className="form-control"
+                                rows={6}
+                                placeholder="Collez les tweets, les hashtags, les stats ici..."
+                                value={socialInputs.twitter}
+                                onChange={(e) => setSocialInputs({ ...socialInputs, twitter: e.target.value })}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label" style={{ color: "var(--primary)" }}>Données Meta (FB/Insta)</label>
+                            <textarea
+                                className="form-control"
+                                rows={6}
+                                placeholder="Collez les posts, commentaires, stats ici..."
+                                value={socialInputs.meta}
+                                onChange={(e) => setSocialInputs({ ...socialInputs, meta: e.target.value })}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label" style={{ color: "var(--primary)" }}>Données LinkedIn</label>
+                            <textarea
+                                className="form-control"
+                                rows={6}
+                                placeholder="Collez les publications, engagement, sujets ici..."
+                                value={socialInputs.linkedin}
+                                onChange={(e) => setSocialInputs({ ...socialInputs, linkedin: e.target.value })}
+                            />
+                        </div>
                     </div>
 
                     <button
                         className="btn btn-outline"
                         onClick={handleAnalyzeSocial}
-                        disabled={!socialInput || socialGenerating}
+                        disabled={(!socialInputs.twitter && !socialInputs.meta && !socialInputs.linkedin) || socialGenerating}
                         style={{ marginBottom: "1.5rem" }}
                     >
                         {socialGenerating ? <><Loader2 className="animate-spin" size={18} /> Analyse en cours...</> : <><RefreshCw size={18} /> Générer le rapport IA</>}
                     </button>
 
-                    {socialAnalysis && (
-                        <div className="form-group">
-                            <label className="form-label">Synthèse IA (Modifiable)</label>
-                            <textarea
-                                className="form-control"
-                                rows={10}
-                                value={socialAnalysis}
-                                onChange={(e) => setSocialAnalysis(e.target.value)}
-                            />
+                    {(socialAnalysis.twitter.synthesis || socialAnalysis.meta.synthesis || socialAnalysis.linkedin.synthesis) && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                            {socialAnalysis.twitter.synthesis && (
+                                <div className="form-group">
+                                    <label className="form-label">Synthèse IA Twitter/X (Modifiable)</label>
+                                    <textarea
+                                        className="form-control"
+                                        rows={4}
+                                        value={socialAnalysis.twitter.synthesis}
+                                        onChange={(e) => setSocialAnalysis({
+                                            ...socialAnalysis,
+                                            twitter: { ...socialAnalysis.twitter, synthesis: e.target.value }
+                                        })}
+                                    />
+                                </div>
+                            )}
+                            {socialAnalysis.meta.synthesis && (
+                                <div className="form-group">
+                                    <label className="form-label">Synthèse IA Meta (Modifiable)</label>
+                                    <textarea
+                                        className="form-control"
+                                        rows={4}
+                                        value={socialAnalysis.meta.synthesis}
+                                        onChange={(e) => setSocialAnalysis({
+                                            ...socialAnalysis,
+                                            meta: { ...socialAnalysis.meta, synthesis: e.target.value }
+                                        })}
+                                    />
+                                </div>
+                            )}
+                            {socialAnalysis.linkedin.synthesis && (
+                                <div className="form-group">
+                                    <label className="form-label">Synthèse IA LinkedIn (Modifiable)</label>
+                                    <textarea
+                                        className="form-control"
+                                        rows={4}
+                                        value={socialAnalysis.linkedin.synthesis}
+                                        onChange={(e) => setSocialAnalysis({
+                                            ...socialAnalysis,
+                                            linkedin: { ...socialAnalysis.linkedin, synthesis: e.target.value }
+                                        })}
+                                    />
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -359,8 +504,8 @@ export default function ReportBuilder() {
                     <ReportViewer
                         reportType={reportType}
                         dateRange={dateRange}
-                        mediaArticles={mediaArticles}
-                        islamArticles={islamArticles}
+                        mediaArticles={mediaArticles.filter(a => a.selected !== false)}
+                        islamArticles={islamArticles.filter(a => a.selected !== false)}
                         socialAnalysis={socialAnalysis}
                     />
 

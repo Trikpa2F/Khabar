@@ -13,15 +13,70 @@ interface Article {
     synthesis: string;
 }
 
+export interface TwitterData {
+    synthesis: string;
+    mentions: number;
+    retweets: number;
+    likes: number;
+    replies: number;
+}
+
+export interface MetaData {
+    synthesis: string;
+}
+
+export interface LinkedInData {
+    synthesis: string;
+    posts: number;
+    reactions: number;
+    comments: number;
+    shares: number;
+}
+
+export interface SocialData {
+    twitter: TwitterData;
+    meta: MetaData;
+    linkedin: LinkedInData;
+}
+
 interface ReportViewerProps {
     reportType: ReportType;
     dateRange: { start: string; end: string };
     mediaArticles: Article[];
     islamArticles: Article[];
-    socialAnalysis: string;
+    socialAnalysis: SocialData;
 }
 
 export default function ReportViewer({ reportType, dateRange, mediaArticles, islamArticles, socialAnalysis }: ReportViewerProps) {
+    const handleCopyToCanva = () => {
+        const text = `
+=== ANALYSE RÉSEAUX SOCIAUX ===
+
+[ TWITTER / X ]
+Mentions: ${socialAnalysis.twitter.mentions}
+Retweets: ${socialAnalysis.twitter.retweets}
+Likes: ${socialAnalysis.twitter.likes}
+Réponses: ${socialAnalysis.twitter.replies}
+
+Synthèse :
+${socialAnalysis.twitter.synthesis}
+
+[ META (FACEBOOK / INSTAGRAM) ]
+Synthèse :
+${socialAnalysis.meta.synthesis}
+
+[ LINKEDIN ]
+Posts: ${socialAnalysis.linkedin.posts}
+Réactions: ${socialAnalysis.linkedin.reactions}
+Commentaires: ${socialAnalysis.linkedin.comments}
+Partages: ${socialAnalysis.linkedin.shares}
+
+Synthèse :
+${socialAnalysis.linkedin.synthesis}
+        `.trim();
+        navigator.clipboard.writeText(text);
+        alert("Texte copié ! Vous pouvez le coller dans Canva.");
+    };
     // Dummy chart data for UI
     const chartData = [
         { name: "S1", retombees: 1 },
@@ -143,16 +198,61 @@ export default function ReportViewer({ reportType, dateRange, mediaArticles, isl
                             <FileText size={48} />
                             <h2 style={{ fontSize: "2.5rem", textTransform: "uppercase", fontWeight: "800", margin: 0 }}>Rapport de veille réseaux sociaux</h2>
                         </div>
-                        <div style={{ fontSize: "1.2rem", fontWeight: "600", color: "#007fb5" }}>
-                            Du {dateRange.start} au {dateRange.end}
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
+                            <div style={{ fontSize: "1.2rem", fontWeight: "600", color: "#007fb5" }}>
+                                Du {dateRange.start} au {dateRange.end}
+                            </div>
+                            <button className="btn btn-outline btn-sm no-print" onClick={handleCopyToCanva} style={{ fontSize: "0.8rem", padding: "0.2rem 0.5rem" }}>
+                                Copier pour Canva
+                            </button>
                         </div>
                     </div>
 
-                    <div style={{ backgroundColor: "#007fb5", color: "white", padding: "2rem", marginBottom: "3rem" }}>
-                        <h3 style={{ fontSize: "1.4rem", marginBottom: "1rem", fontWeight: "700" }}>Synthèse générale de la période :</h3>
-                        <div style={{ lineHeight: "1.6", fontSize: "1.1rem", whiteSpace: "pre-wrap" }}>
-                            {socialAnalysis || "Aucune analyse disponible."}
-                        </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+                        {socialAnalysis.twitter.synthesis && (
+                            <div style={{ borderLeft: "4px solid #1DA1F2", paddingLeft: "1.5rem" }}>
+                                <h3 style={{ fontSize: "1.4rem", color: "#1DA1F2", marginBottom: "0.5rem", fontWeight: "700" }}>Twitter / X</h3>
+                                <div style={{ display: "flex", gap: "1.5rem", marginBottom: "1rem" }}>
+                                    <span style={{ fontSize: "0.9rem", color: "#555" }}><strong>{socialAnalysis.twitter.mentions}</strong> Mentions</span>
+                                    <span style={{ fontSize: "0.9rem", color: "#555" }}><strong>{socialAnalysis.twitter.retweets}</strong> Retweets</span>
+                                    <span style={{ fontSize: "0.9rem", color: "#555" }}><strong>{socialAnalysis.twitter.likes}</strong> Likes</span>
+                                    <span style={{ fontSize: "0.9rem", color: "#555" }}><strong>{socialAnalysis.twitter.replies}</strong> Réponses</span>
+                                </div>
+                                <div style={{ lineHeight: "1.6", fontSize: "1.05rem", whiteSpace: "pre-wrap" }}>
+                                    {socialAnalysis.twitter.synthesis}
+                                </div>
+                            </div>
+                        )}
+
+                        {socialAnalysis.meta.synthesis && (
+                            <div style={{ borderLeft: "4px solid #1877F2", paddingLeft: "1.5rem" }}>
+                                <h3 style={{ fontSize: "1.4rem", color: "#1877F2", marginBottom: "0.5rem", fontWeight: "700" }}>Meta (Facebook / Instagram)</h3>
+                                <div style={{ lineHeight: "1.6", fontSize: "1.05rem", whiteSpace: "pre-wrap" }}>
+                                    {socialAnalysis.meta.synthesis}
+                                </div>
+                            </div>
+                        )}
+
+                        {socialAnalysis.linkedin.synthesis && (
+                            <div style={{ borderLeft: "4px solid #0A66C2", paddingLeft: "1.5rem" }}>
+                                <h3 style={{ fontSize: "1.4rem", color: "#0A66C2", marginBottom: "0.5rem", fontWeight: "700" }}>LinkedIn</h3>
+                                <div style={{ display: "flex", gap: "1.5rem", marginBottom: "1rem" }}>
+                                    <span style={{ fontSize: "0.9rem", color: "#555" }}><strong>{socialAnalysis.linkedin.posts}</strong> Posts</span>
+                                    <span style={{ fontSize: "0.9rem", color: "#555" }}><strong>{socialAnalysis.linkedin.reactions}</strong> Réactions</span>
+                                    <span style={{ fontSize: "0.9rem", color: "#555" }}><strong>{socialAnalysis.linkedin.comments}</strong> Commentaires</span>
+                                    <span style={{ fontSize: "0.9rem", color: "#555" }}><strong>{socialAnalysis.linkedin.shares}</strong> Partages</span>
+                                </div>
+                                <div style={{ lineHeight: "1.6", fontSize: "1.05rem", whiteSpace: "pre-wrap" }}>
+                                    {socialAnalysis.linkedin.synthesis}
+                                </div>
+                            </div>
+                        )}
+
+                        {!socialAnalysis.twitter.synthesis && !socialAnalysis.meta.synthesis && !socialAnalysis.linkedin.synthesis && (
+                            <div style={{ backgroundColor: "#f3f4f6", padding: "2rem", color: "#666", textAlign: "center", borderRadius: "8px" }}>
+                                Aucune analyse réseaux sociaux disponible pour cette période.
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
